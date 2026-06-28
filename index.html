@@ -153,6 +153,7 @@ const SITES = {
   SG:{name:"Singapore",cur:"SGD"}, MY:{name:"Malaysia",cur:"MYR"}, PH:{name:"Philippines",cur:"PHP"},
 };
 const ALL = Object.keys(SITES);
+const DEFAULT_WORKER = "https://cross-border-ebay.stoppet.workers.dev";
 const LS = { state:"xbe.state", pins:"xbe.pins", theme:"xbe.theme", worker:"xbe.worker" };
 const $ = (id) => document.getElementById(id);
 const q=$("q"), go=$("go"), scope=$("scope"), sort=$("sort"), cond=$("cond"), min=$("min"), max=$("max"),
@@ -161,7 +162,7 @@ let pins = load(LS.pins, []);
 
 function load(k,f){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):f; }catch(e){ return f; } }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
-function workerBase(){ return (worker.value || "").trim().replace(/\/+$/,""); }
+function workerBase(){ return (worker.value || DEFAULT_WORKER).trim().replace(/\/+$/,""); }
 
 function saveState(){
   save(LS.state, {q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked});
