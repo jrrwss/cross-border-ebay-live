@@ -16,19 +16,23 @@ const PER_COUNTRY = 12;        // listings kept per country
 const FETCH_TIMEOUT_MS = 9000;
 
 export default {
-  async fetch(request) {
-    if (request.method === "OPTIONS") return withCORS(new Response(null, { status: 204 }));
+  async fetch(request, env) {
+    const allowedOrigins = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const reqOrigin = request.headers.get("Origin") || "";
+    const responseOrigin = allowedOrigins.includes(reqOrigin) ? reqOrigin : (allowedOrigins.length ? null : "*");
+
+    if (request.method === "OPTIONS") return withCORS(new Response(null, { status: 204 }), responseOrigin);
 
     const url = new URL(request.url);
     if (url.pathname !== "/search") {
-      return withCORS(new Response("Cross-border eBay worker. Use /search?q=...&countries=DE,GB,US", { status: 200 }));
+      return withCORS(new Response("Cross-border eBay worker. Use /search?q=...&countries=DE,GB,US", { status: 200 }), responseOrigin);
     }
 
     const p = url.searchParams;
     const q = (p.get("q") || "").trim();
     const countries = (p.get("countries") || "").split(",").map((c) => c.trim().toUpperCase()).filter((c) => DOMAINS[c]);
     if (!q || !countries.length) {
-      return withCORS(Response.json({ items: [], errors: ["Missing q or countries"] }));
+      return withCORS(Response.json({ items: [], errors: ["Missing q or countries"] }), responseOrigin);
     }
 
     const results = await Promise.allSettled(
@@ -42,7 +46,7 @@ export default {
       else errors.push(`${countries[i]}: ${r.reason}`);
     });
 
-    return withCORS(Response.json({ count: items.length, items, errors }));
+    return withCORS(Response.json({ count: items.length, items, errors }), responseOrigin);
   },
 };
 
@@ -141,9 +145,10 @@ function parsePrice(str) {
   return isNaN(n) ? null : n;
 }
 
-function withCORS(res) {
+function withCORS(res, origin) {
   const h = new Headers(res.headers);
-  h.set("Access-Control-Allow-Origin", "*");
+  if (origin) h.set("Access-Control-Allow-Origin", origin);
+  if (origin && origin !== "*") h.set("Vary", "Origin");
   h.set("Access-Control-Allow-Methods", "GET, OPTIONS");
   h.set("Cache-Control", "no-store");
   return new Response(res.body, { status: res.status, headers: h });
