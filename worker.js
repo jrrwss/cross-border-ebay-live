@@ -1,19 +1,65 @@
-// Cross-border eBay — Cloudflare Worker
-// Fetches eBay search results for multiple country sites server-side and
-// returns a merged JSON list. No eBay API key required.
-//
-// NOTE: this parses eBay's public search HTML. eBay can change that markup at
-// any time, in which case the selectors in parseItems() need updating. eBay may
-// also rate-limit or block automated requests; keep volume low (personal use).
+// Cross-border eBay — Cloudflare Worker (Browse API edition)
+// Uses eBay's official Browse API item_summary/search endpoint.
+// Requires EBAY_CLIENT_ID and EBAY_CLIENT_SECRET wrangler secrets.
 
-const DOMAINS = {
-  GB: "co.uk", DE: "de", FR: "fr", IT: "it", ES: "es", AT: "at", CH: "ch",
-  IE: "ie", NL: "nl", BE: "be", PL: "pl", US: "com", CA: "ca", AU: "com.au",
-  HK: "com.hk", SG: "com.sg", MY: "com.my", PH: "ph",
+const MARKETPLACE = {
+  GB: "EBAY_GB", DE: "EBAY_DE", FR: "EBAY_FR", IT: "EBAY_IT", ES: "EBAY_ES",
+  AT: "EBAY_AT", CH: "EBAY_CH", IE: "EBAY_IE", NL: "EBAY_NL", BE: "EBAY_BE",
+  PL: "EBAY_PL", US: "EBAY_US", CA: "EBAY_CA", AU: "EBAY_AU", HK: "EBAY_HK",
+  SG: "EBAY_SG", MY: "EBAY_MY", PH: "EBAY_PH",
 };
 
-const PER_COUNTRY = 12;        // listings kept per country
+const CURRENCY = {
+  GB: "GBP", DE: "EUR", FR: "EUR", IT: "EUR", ES: "EUR", AT: "EUR", CH: "CHF",
+  IE: "EUR", NL: "EUR", BE: "EUR", PL: "PLN", US: "USD", CA: "CAD", AU: "AUD",
+  HK: "HKD", SG: "SGD", MY: "MYR", PH: "PHP",
+};
+
+// Frontend sort value -> Browse API sort parameter
+const SORT_MAP = {
+  "16": "PRICE_PLUS_SHIPPING_LOWEST",
+  "15": "PRICE_PLUS_SHIPPING_HIGHEST",
+  "10": "NEWLY_LISTED",
+  "1":  "ENDING_SOONEST",
+  // "12" = Best match is the API default; omit the param
+};
+
+// Frontend conditionId -> Browse API condition enum
+const COND_MAP = {
+  "1000": "NEW",
+  "1500": "NEW_OTHER",
+  "2000": "MANUFACTURER_REFURBISHED",
+  "2500": "SELLER_REFURBISHED",
+  "3000": "USED",
+};
+
+const PER_COUNTRY = 12;
 const FETCH_TIMEOUT_MS = 9000;
+const BROWSE_API = "https://api.ebay.com/buy/browse/v1/item_summary/search";
+const TOKEN_URL  = "https://api.ebay.com/identity/v1/oauth2/token";
+
+// Module-level token cache; survives across requests in the same Worker instance.
+let tokenCache = { token: null, expiry: 0 };
+
+async function getToken(env) {
+  if (tokenCache.token && Date.now() < tokenCache.expiry) return tokenCache.token;
+  const creds = btoa(`${env.EBAY_CLIENT_ID}:${env.EBAY_CLIENT_SECRET}`);
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${creds}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+  });
+  if (!res.ok) throw new Error(`OAuth token failed: HTTP ${res.status}`);
+  const data = await res.json();
+  tokenCache = {
+    token: data.access_token,
+    expiry: Date.now() + (data.expires_in - 60) * 1000, // 60 s safety margin
+  };
+  return tokenCache.token;
+}
 
 export default {
   async fetch(request, env) {
@@ -30,13 +76,20 @@ export default {
 
     const p = url.searchParams;
     const q = (p.get("q") || "").trim();
-    const countries = (p.get("countries") || "").split(",").map((c) => c.trim().toUpperCase()).filter((c) => DOMAINS[c]);
+    const countries = (p.get("countries") || "").split(",").map((c) => c.trim().toUpperCase()).filter((c) => MARKETPLACE[c]);
     if (!q || !countries.length) {
       return withCORS(Response.json({ items: [], errors: ["Missing q or countries"] }), responseOrigin);
     }
 
+    let token;
+    try {
+      token = await getToken(env);
+    } catch (e) {
+      return withCORS(Response.json({ items: [], errors: [`Auth: ${e.message}`] }), responseOrigin);
+    }
+
     const results = await Promise.allSettled(
-      countries.map((cc) => fetchCountry(cc, q, p))
+      countries.map((cc) => fetchCountry(cc, q, p, token))
     );
 
     const items = [];
@@ -50,99 +103,66 @@ export default {
   },
 };
 
-function ebayUrl(cc, q, p) {
-  const sp = new URLSearchParams({ _nkw: q });
-  if (p.get("sort")) sp.set("_sop", p.get("sort"));
-  if (p.get("cond")) sp.set("LH_ItemCondition", p.get("cond"));
-  if (p.get("min")) sp.set("_udlo", p.get("min"));
-  if (p.get("max")) sp.set("_udhi", p.get("max"));
-  if (p.get("loc") === "1") sp.set("LH_PrefLoc", "1");
-  if (p.get("bin") === "1") sp.set("LH_BIN", "1");
-  if (p.get("fs") === "1") sp.set("LH_FS", "1");
-  return `https://www.ebay.${DOMAINS[cc]}/sch/i.html?${sp.toString()}`;
-}
+async function fetchCountry(cc, q, p, token) {
+  const params = new URLSearchParams({ q, limit: String(PER_COUNTRY) });
 
-async function fetchCountry(cc, q, p) {
+  const sort = SORT_MAP[p.get("sort") || ""];
+  if (sort) params.set("sort", sort);
+
+  const filters = [];
+  if (p.get("loc") === "1") filters.push(`itemLocationCountry:${cc}`);
+  const condEnum = COND_MAP[p.get("cond") || ""];
+  if (condEnum) filters.push(`conditions:{${condEnum}}`);
+  const lo = p.get("min") || "", hi = p.get("max") || "";
+  if (lo || hi) {
+    filters.push(`price:[${lo}..${hi}]`);
+    filters.push(`priceCurrency:${CURRENCY[cc]}`);
+  }
+  if (p.get("bin") === "1") filters.push("buyingOptions:{FIXED_PRICE}");
+  if (p.get("fs") === "1") filters.push("deliveryOptions:{FREE_SHIPPING}");
+  if (filters.length) params.set("filter", filters.join(","));
+
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(ebayUrl(cc, q, p), {
+    const res = await fetch(`${BROWSE_API}?${params}`, {
       signal: ctrl.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
+        Authorization: `Bearer ${token}`,
+        "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE[cc],
       },
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const html = await res.text();
-    return parseItems(html, cc);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${body ? ": " + body.slice(0, 200) : ""}`);
+    }
+    const data = await res.json();
+    return (data.itemSummaries || []).map((item) => mapItem(item, cc));
   } finally {
     clearTimeout(t);
   }
 }
 
-function parseItems(html, cc) {
-  const out = [];
-  const chunks = html.split('<li class="s-item');
-  for (let i = 1; i < chunks.length && out.length < PER_COUNTRY; i++) {
-    const c = chunks[i];
-    const url = (c.match(/href="(https?:\/\/[^"]*\/itm\/[^"]+)"/) || [])[1];
-    const title = field(c, "s-item__title");
-    if (!url || !title || /^shop on ebay$/i.test(title)) continue;
-
-    const priceStr = field(c, "s-item__price");
-    const image =
-      (c.match(/s-item__image-img[^>]*?src="([^"]+)"/) || [])[1] ||
-      (c.match(/s-item__image-img[^>]*?data-src="([^"]+)"/) || [])[1] || null;
-
-    out.push({
-      cc,
-      title,
-      url,
-      image,
-      price: priceStr || null,
-      priceValue: parsePrice(priceStr),
-      condition: field(c, "SECONDARY_INFO") || null,
-      shipping: field(c, "s-item__shipping") || null,
-      location: clean((field(c, "s-item__location") || "").replace(/^from\s*/i, "")) || null,
-    });
-  }
-  return out;
-}
-
-// Grab the text content right after class="<cls>"
-function field(chunk, cls) {
-  const re = new RegExp('"' + cls + '[^"]*"[^>]*>([\\s\\S]*?)</', "i");
-  const m = chunk.match(re);
-  return m ? clean(m[1]) : "";
-}
-
-function clean(s) {
-  if (!s) return "";
-  return s
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&apos;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function parsePrice(str) {
-  if (!str) return null;
-  const t = (str.match(/\d[\d.,]*/) || [])[0];
-  if (!t) return null;
-  let x = t;
-  if (x.includes(",") && x.includes(".")) {
-    x = x.lastIndexOf(",") > x.lastIndexOf(".")
-      ? x.replace(/\./g, "").replace(",", ".")
-      : x.replace(/,/g, "");
-  } else if (x.includes(",")) {
-    x = /,\d{2}$/.test(x) ? x.replace(/\./g, "").replace(",", ".") : x.replace(/,/g, "");
-  }
-  const n = parseFloat(x);
-  return isNaN(n) ? null : n;
+function mapItem(item, cc) {
+  const priceVal = parseFloat(item.price?.value) || null;
+  // Return just the numeric string; the frontend already shows the currency code separately.
+  const priceStr = item.price?.value || null;
+  const sc = item.shippingOptions?.[0]?.shippingCost;
+  const shippingStr = sc
+    ? (parseFloat(sc.value) === 0 ? "Free shipping" : `${sc.currency} ${sc.value}`)
+    : null;
+  const loc = [item.itemLocation?.city, item.itemLocation?.country].filter(Boolean).join(", ");
+  return {
+    cc,
+    title: item.title,
+    url: item.itemWebUrl,
+    image: item.image?.imageUrl || null,
+    price: priceStr,
+    priceValue: priceVal,
+    condition: item.condition || null,
+    shipping: shippingStr,
+    location: loc || null,
+  };
 }
 
 function withCORS(res, origin) {
