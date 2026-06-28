@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Cross-border eBay</title>
+<meta name="theme-color" content="#003478" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="XB eBay" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23FBFAF7'/%3E%3Cpath d='M4 22 L28 10' stroke='%23C8102E' stroke-width='3'/%3E%3Cpath d='M4 16 L28 4' stroke='%23003478' stroke-width='3'/%3E%3Ccircle cx='9' cy='23' r='3' fill='%23003478'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#FBFAF7; --panel:#FFFFFF; --ink:#1B1A17; --muted:#6E6A61; --faint:#97928A;
+    --hair:#E6E2DA; --hair-strong:#D6D1C7; --red:#C8102E; --blue:#003478;
+    --red-bg:#FBEAEC; --blue-bg:#E8EEF6; --accent:var(--blue); --field:#FFFFFF;
+    --radius:11px; --maxw:820px;
+    --sans:'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:'Space Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#131318; --panel:#1C1D24; --ink:#ECEAE3; --muted:#9A968D; --faint:#74716A;
+    --hair:#2A2B33; --hair-strong:#3A3B45; --red:#FF5A6E; --blue:#6FA0E8;
+    --red-bg:#2A1518; --blue-bg:#16202F; --field:#23242C;
+  }}
+  :root[data-theme="dark"]{
+    --paper:#131318; --panel:#1C1D24; --ink:#ECEAE3; --muted:#9A968D; --faint:#74716A;
+    --hair:#2A2B33; --hair-strong:#3A3B45; --red:#FF5A6E; --blue:#6FA0E8;
+    --red-bg:#2A1518; --blue-bg:#16202F; --field:#23242C;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:16px; line-height:1.5; -webkit-font-smoothing:antialiased;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  .airmail{height:7px; background:repeating-linear-gradient(-45deg, var(--red) 0 9px, transparent 9px 18px, var(--blue) 18px 27px, transparent 27px 36px); background-color:var(--paper);}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:26px 20px 64px;}
+  header{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:22px;}
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--red); margin:0 0 7px;}
+  h1{font-size:29px; font-weight:700; letter-spacing:-.02em; margin:0; line-height:1.08;}
+  .sub{color:var(--muted); font-size:14px; margin:9px 0 0; max-width:48ch;}
+  .theme-btn{flex:none; width:38px; height:38px; border:1px solid var(--hair-strong); background:var(--panel); border-radius:50%; color:var(--ink); cursor:pointer; display:grid; place-items:center;}
+  .theme-btn svg{width:18px; height:18px;}
+
+  .console{background:var(--panel); border:1px solid var(--hair); border-radius:14px; padding:16px; margin-bottom:22px;}
+  .searchrow{display:flex; gap:10px; margin-bottom:13px;}
+  .searchrow .ico{position:relative; flex:1;}
+  .searchrow .ico svg{position:absolute; left:15px; top:50%; transform:translateY(-50%); width:19px; height:19px; color:var(--faint); pointer-events:none;}
+  #q{width:100%; height:52px; padding:0 16px 0 44px; font-family:var(--sans); font-size:18px; font-weight:500; color:var(--ink); background:var(--field); border:1.5px solid var(--hair-strong); border-radius:var(--radius); outline:none;}
+  #q:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--blue-bg);}
+  #go{flex:none; height:52px; padding:0 22px; font-family:var(--sans); font-size:15px; font-weight:500; color:#fff; background:var(--blue); border:none; border-radius:var(--radius); cursor:pointer; display:inline-flex; align-items:center; gap:8px;}
+  #go:disabled{opacity:.55; cursor:default;}
+  #go svg{width:17px; height:17px;}
+
+  .filters{display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:13px;}
+  .field label{display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0 0 5px 2px;}
+  select,.field input{width:100%; height:40px; padding:0 11px; font-family:var(--sans); font-size:14px; color:var(--ink); background:var(--field); border:1px solid var(--hair-strong); border-radius:9px; outline:none; appearance:none;}
+  select:focus,.field input:focus{border-color:var(--accent);}
+  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%236E6A61' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 11px center; padding-right:30px;}
+  .toggles{display:flex; flex-wrap:wrap; gap:8px;}
+  .toggle{display:inline-flex; align-items:center; gap:8px; padding:8px 13px; border:1px solid var(--hair-strong); border-radius:999px; font-size:13.5px; color:var(--muted); cursor:pointer; user-select:none;}
+  .toggle input{position:absolute; opacity:0; width:0; height:0;}
+  .toggle .dot{width:15px; height:15px; border-radius:5px; border:1.5px solid var(--hair-strong); display:grid; place-items:center; flex:none;}
+  .toggle .dot svg{width:9px; height:9px; color:#fff; opacity:0;}
+  .toggle:has(input:checked){color:var(--ink); border-color:var(--accent); background:var(--blue-bg);}
+  .toggle:has(input:checked) .dot{background:var(--accent); border-color:var(--accent);}
+  .toggle:has(input:checked) .dot svg{opacity:1;}
+
+  details.setup{margin-top:13px; border-top:1px dashed var(--hair-strong); padding-top:12px;}
+  details.setup summary{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); cursor:pointer; list-style:none;}
+  details.setup summary::-webkit-details-marker{display:none;}
+  details.setup .row{display:flex; gap:8px; margin-top:10px;}
+  #worker{flex:1; height:38px; padding:0 11px; font-family:var(--mono); font-size:12px; color:var(--ink); background:var(--field); border:1px solid var(--hair-strong); border-radius:9px; outline:none;}
+  #worker:focus{border-color:var(--accent);}
+  .hint{font-size:12px; color:var(--faint); margin:8px 2px 0; line-height:1.55;}
+
+  .status{font-family:var(--mono); font-size:12px; color:var(--muted); margin:4px 2px 14px; min-height:18px;}
+  .status.err{color:var(--red);}
+  .results{display:flex; flex-direction:column; gap:10px;}
+  .card{display:flex; gap:13px; padding:12px; background:var(--panel); border:1px solid var(--hair); border-radius:12px; text-decoration:none; color:var(--ink); position:relative;}
+  .card::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--blue); border-radius:12px 0 0 12px;}
+  .card:hover{border-color:var(--accent);}
+  .thumb{width:78px; height:78px; flex:none; border-radius:8px; object-fit:cover; background:var(--blue-bg);}
+  .body{display:flex; flex-direction:column; min-width:0; flex:1; gap:4px;}
+  .top{display:flex; align-items:center; gap:8px;}
+  .code{font-family:var(--mono); font-weight:700; font-size:11px; letter-spacing:.04em; color:var(--blue); background:var(--blue-bg); padding:3px 6px; border-radius:6px;}
+  .title{font-size:14.5px; font-weight:500; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .price{font-size:16px; font-weight:700;}
+  .meta{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px;}
+  .empty{text-align:center; color:var(--muted); padding:40px 16px; font-size:14px;}
+  @media (max-width:520px){.wrap{padding:22px 15px 52px;} h1{font-size:24px;} .searchrow{flex-wrap:wrap;} #go{width:100%; justify-content:center;} .thumb{width:64px; height:64px;}}
+</style>
+</head>
+<body>
+<div class="airmail" aria-hidden="true"></div>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Global dispatch &middot; one search, many storefronts</p>
+      <h1>Cross-border eBay</h1>
+      <p class="sub">Search several countries' eBay at once and see the listings merged into one list &mdash; filtered to items located in each country, the ones that ship locally to your post box.</p>
+    </div>
+    <button class="theme-btn" id="theme" aria-label="Toggle theme"></button>
+  </header>
+
+  <section class="console">
+    <div class="searchrow">
+      <span class="ico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="q" type="search" placeholder="What are you looking for?" autocomplete="off" />
+      </span>
+      <button id="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>Search</button>
+    </div>
+
+    <div class="filters">
+      <div class="field"><label for="scope">Countries</label>
+        <select id="scope"><option value="all">All sites</option><option value="pinned">My post boxes (pinned)</option></select></div>
+      <div class="field"><label for="sort">Sort by</label>
+        <select id="sort"><option value="12">Best match</option><option value="16">Price + shipping: lowest</option><option value="15">Price + shipping: highest</option><option value="10">Newly listed</option><option value="1">Ending soonest</option></select></div>
+      <div class="field"><label for="cond">Condition</label>
+        <select id="cond"><option value="">Any</option><option value="1000">New</option><option value="1500">New other</option><option value="2000">Manufacturer refurbished</option><option value="2500">Seller refurbished</option><option value="3000">Used</option></select></div>
+      <div class="field"><label for="min">Min price</label><input id="min" type="number" min="0" inputmode="numeric" placeholder="0" /></div>
+      <div class="field"><label for="max">Max price</label><input id="max" type="number" min="0" inputmode="numeric" placeholder="—" /></div>
+    </div>
+
+    <div class="toggles">
+      <label class="toggle"><input id="loc" type="checkbox" checked /><span class="dot"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6l3 3 5-6"/></svg></span>Located in country</label>
+      <label class="toggle"><input id="bin" type="checkbox" /><span class="dot"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6l3 3 5-6"/></svg></span>Buy It Now only</label>
+      <label class="toggle"><input id="fs" type="checkbox" /><span class="dot"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6l3 3 5-6"/></svg></span>Free shipping</label>
+    </div>
+
+    <details class="setup" id="setup">
+      <summary>Worker endpoint</summary>
+      <div class="row">
+        <input id="worker" type="url" placeholder="https://cross-border-ebay.your-name.workers.dev" />
+      </div>
+      <p class="hint">Paste the URL printed when you deploy the Cloudflare Worker (see README). Saved in this browser only.</p>
+    </details>
+  </section>
+
+  <div class="status" id="status"></div>
+  <div class="results" id="results"></div>
+</div>
+
+<script>
+const SITES = {
+  GB:{name:"United Kingdom",cur:"GBP"}, DE:{name:"Germany",cur:"EUR"}, FR:{name:"France",cur:"EUR"},
+  IT:{name:"Italy",cur:"EUR"}, ES:{name:"Spain",cur:"EUR"}, AT:{name:"Austria",cur:"EUR"},
+  CH:{name:"Switzerland",cur:"CHF"}, IE:{name:"Ireland",cur:"EUR"}, NL:{name:"Netherlands",cur:"EUR"},
+  BE:{name:"Belgium",cur:"EUR"}, PL:{name:"Poland",cur:"PLN"}, US:{name:"United States",cur:"USD"},
+  CA:{name:"Canada",cur:"CAD"}, AU:{name:"Australia",cur:"AUD"}, HK:{name:"Hong Kong",cur:"HKD"},
+  SG:{name:"Singapore",cur:"SGD"}, MY:{name:"Malaysia",cur:"MYR"}, PH:{name:"Philippines",cur:"PHP"},
+};
+const ALL = Object.keys(SITES);
+const LS = { state:"xbe.state", pins:"xbe.pins", theme:"xbe.theme", worker:"xbe.worker" };
+const $ = (id) => document.getElementById(id);
+const q=$("q"), go=$("go"), scope=$("scope"), sort=$("sort"), cond=$("cond"), min=$("min"), max=$("max"),
+      loc=$("loc"), bin=$("bin"), fs=$("fs"), worker=$("worker"), statusEl=$("status"), resultsEl=$("results");
+let pins = load(LS.pins, []);
+
+function load(k,f){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):f; }catch(e){ return f; } }
+function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function workerBase(){ return (worker.value || "").trim().replace(/\/+$/,""); }
+
+function saveState(){
+  save(LS.state, {q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked});
+  save(LS.worker, worker.value.trim());
+}
+
+function chosenCountries(){
+  if (scope.value === "pinned" && pins.length) return pins.filter((c)=>SITES[c]);
+  return ALL;
+}
+
+async function search(){
+  saveState();
+  const term = q.value.trim();
+  if (!term){ q.focus(); return; }
+  const base = workerBase();
+  if (!base){ $("setup").open = true; setStatus("Add your Worker URL below to search.", true); return; }
+
+  const countries = chosenCountries();
+  const params = new URLSearchParams({
+    q: term, countries: countries.join(","), sort: sort.value,
+    loc: loc.checked?"1":"0", bin: bin.checked?"1":"0", fs: fs.checked?"1":"0",
+  });
+  if (cond.value) params.set("cond", cond.value);
+  if (min.value) params.set("min", min.value);
+  if (max.value) params.set("max", max.value);
+
+  go.disabled = true;
+  setStatus("Searching " + countries.length + " " + (countries.length===1?"site":"sites") + "…");
+  resultsEl.innerHTML = "";
+  try {
+    const res = await fetch(base + "/search?" + params.toString());
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    render(data.items || [], data.errors || []);
+  } catch (e) {
+    setStatus("Couldn't reach the Worker (" + e.message + "). Check the URL and that it's deployed.", true);
+  } finally {
+    go.disabled = false;
+  }
+}
+
+function order(items){
+  const s = sort.value;
+  if (s === "16") return [...items].sort((a,b)=>(a.priceValue??1e15)-(b.priceValue??1e15));
+  if (s === "15") return [...items].sort((a,b)=>(b.priceValue??-1)-(a.priceValue??-1));
+  // otherwise interleave round-robin so one country doesn't dominate the top
+  const byCc = {}; items.forEach((it)=>{ (byCc[it.cc] ??= []).push(it); });
+  const queues = Object.values(byCc); const out = []; let added = true;
+  while (added){ added=false; for (const qx of queues){ if (qx.length){ out.push(qx.shift()); added=true; } } }
+  return out;
+}
+
+function render(items, errors){
+  if (!items.length){
+    resultsEl.innerHTML = '<div class="empty">No listings found. Try a broader search, or untick "Located in country" for worldwide sellers.</div>';
+    setStatus(errors.length ? errors.length + " site(s) failed to load." : "No results.", !!errors.length);
+    return;
+  }
+  const sorted = order(items);
+  resultsEl.innerHTML = sorted.map(cardHTML).join("");
+  const note = errors.length ? " · " + errors.length + " site(s) unavailable" : "";
+  setStatus(items.length + " listings · prices in each site's local currency" + note, false);
+}
+
+function cardHTML(it){
+  const cur = (SITES[it.cc]||{}).cur || "";
+  const meta = [it.condition, it.location, it.shipping].filter(Boolean).map(esc).join('</span><span>');
+  return '<a class="card" href="'+esc(it.url)+'" target="_blank" rel="noopener">'+
+    (it.image ? '<img class="thumb" loading="lazy" src="'+esc(it.image)+'" alt="" />' : '<div class="thumb"></div>')+
+    '<div class="body"><div class="top"><span class="code">'+it.cc+'</span>'+
+    (it.price ? '<span class="price">'+esc(it.price)+'</span>' : '')+
+    '<span style="font-family:var(--mono);font-size:11px;color:var(--faint)">'+cur+'</span></div>'+
+    '<div class="title">'+esc(it.title)+'</div>'+
+    (meta ? '<div class="meta"><span>'+meta+'</span></div>' : '')+
+    '</div></a>';
+}
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, (c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function setStatus(t, isErr){ statusEl.textContent = t; statusEl.classList.toggle("err", !!isErr); }
+
+go.addEventListener("click", search);
+q.addEventListener("keydown", (e)=>{ if (e.key === "Enter") search(); });
+[scope,sort,cond,min,max,worker].forEach((el)=>el.addEventListener("change", saveState));
+[loc,bin,fs].forEach((el)=>el.addEventListener("change", saveState));
+
+const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>';
+const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.3 6.3 0 0 0 20 14.5z"/></svg>';
+const tb=$("theme");
+function isDark(){ const t=document.documentElement.getAttribute("data-theme"); return t? t==="dark" : matchMedia("(prefers-color-scheme:dark)").matches; }
+function paint(){ tb.innerHTML = isDark()?SUN:MOON; }
+tb.addEventListener("click", ()=>{ const n=isDark()?"light":"dark"; document.documentElement.setAttribute("data-theme",n); save(LS.theme,n); paint(); });
+
+(function init(){
+  const t=load(LS.theme,null); if(t) document.documentElement.setAttribute("data-theme",t); paint();
+  const s=load(LS.state,null);
+  if(s){ q.value=s.q||""; scope.value=s.scope||"all"; sort.value=s.sort||"12"; cond.value=s.cond||""; min.value=s.min||""; max.value=s.max||"";
+    loc.checked=s.loc!==false; bin.checked=!!s.bin; fs.checked=!!s.fs; }
+  worker.value = load(LS.worker, "") || "";
+  if(!worker.value) $("setup").open = true;
+  q.focus();
+})();
+</script>
+</body>
+</html>
