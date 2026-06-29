@@ -70,6 +70,40 @@ export default {
     if (request.method === "OPTIONS") return withCORS(new Response(null, { status: 204 }), responseOrigin);
 
     const url = new URL(request.url);
+
+    if (url.pathname === "/suggest") {
+      const q = (url.searchParams.get("q") || "").trim();
+      if (!q || !env.ANTHROPIC_API_KEY) {
+        return withCORS(Response.json({ suggestions: [] }), responseOrigin);
+      }
+      try {
+        const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": env.ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5",
+            max_tokens: 150,
+            messages: [{
+              role: "user",
+              content: `List 4 common misspellings or alternate spellings that eBay sellers might use when listing "${q}". Return only a JSON array of strings, nothing else. Example: ["misspeling1","misspeling2","misspeling3","misspeling4"]`,
+            }],
+          }),
+        });
+        if (!aiRes.ok) return withCORS(Response.json({ suggestions: [] }), responseOrigin);
+        const aiData = await aiRes.json();
+        const text = aiData.content?.[0]?.text || "[]";
+        let suggestions;
+        try { suggestions = JSON.parse(text); } catch { suggestions = []; }
+        return withCORS(Response.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 5) : [] }), responseOrigin);
+      } catch {
+        return withCORS(Response.json({ suggestions: [] }), responseOrigin);
+      }
+    }
+
     if (url.pathname !== "/search") {
       return withCORS(new Response("Cross-border eBay worker. Use /search?q=...&countries=DE,GB,US", { status: 200 }), responseOrigin);
     }

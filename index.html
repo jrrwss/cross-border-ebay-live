@@ -98,6 +98,11 @@
   .saved-del:hover{color:var(--red);}
   .save-btn{align-self:flex-start; background:none; border:none; color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.06em; cursor:pointer; padding:0;}
   .save-btn:hover{color:var(--accent);}
+  .suggestions{display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:-3px 0 10px;}
+  .suggestions[hidden]{display:none;}
+  .sug-label{font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint);}
+  .suggestion-chip{display:inline-flex; align-items:center; padding:5px 11px; background:var(--blue-bg); border:1px solid var(--blue); border-radius:999px; font-size:12.5px; color:var(--blue); cursor:pointer; font-family:var(--sans);}
+  .suggestion-chip:hover{background:var(--blue); color:#fff;}
   @media (max-width:520px){.wrap{padding:22px 15px 52px;} h1{font-size:24px;} .searchrow{flex-wrap:wrap;} #go{width:100%; justify-content:center;} .thumb{width:64px; height:64px;}}
 </style>
 </head>
@@ -134,6 +139,8 @@
       <div class="field"><label for="variants">Also search</label><input id="variants" type="text" placeholder="leika, leicaflex" /></div>
       <div class="field"><label for="exclude">Exclude</label><input id="exclude" type="text" placeholder="strap, case, manual" /></div>
     </div>
+
+    <div class="suggestions" id="suggestions" hidden></div>
 
     <div class="toggles">
       <label class="toggle"><input id="loc" type="checkbox" checked /><span class="dot"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6l3 3 5-6"/></svg></span>Located in country</label>
@@ -323,6 +330,40 @@ go.addEventListener("click", search);
 q.addEventListener("keydown", (e)=>{ if (e.key === "Enter") search(); });
 [scope,sort,cond,min,max,worker,$("variants"),$("exclude")].forEach((el)=>el.addEventListener("change", saveState));
 [loc,bin,fs].forEach((el)=>el.addEventListener("change", saveState));
+
+let _sugTimer = null;
+q.addEventListener("input", () => {
+  clearTimeout(_sugTimer);
+  const val = q.value.trim();
+  if (!val || val.length < 3) { hideSuggestions(); return; }
+  _sugTimer = setTimeout(() => fetchSuggestions(val), 600);
+});
+function hideSuggestions(){ const el=$("suggestions"); el.hidden=true; el.innerHTML=""; }
+async function fetchSuggestions(term){
+  const base = workerBase(); if (!base) return;
+  try {
+    const res = await fetch(base + "/suggest?q=" + encodeURIComponent(term));
+    if (!res.ok) return;
+    const data = await res.json();
+    showSuggestions(data.suggestions || []);
+  } catch { /* ignore network errors silently */ }
+}
+function showSuggestions(list){
+  const el = $("suggestions");
+  if (!list.length){ el.hidden=true; el.innerHTML=""; return; }
+  el.hidden = false;
+  el.innerHTML = '<span class="sug-label">Suggestions:</span>' +
+    list.map(s => `<button class="suggestion-chip" type="button">${esc(s)}</button>`).join("");
+}
+$("suggestions").addEventListener("click", (e) => {
+  const chip = e.target.closest(".suggestion-chip"); if (!chip) return;
+  const varEl = $("variants");
+  const existing = varEl.value.split(",").map(v => v.trim()).filter(Boolean);
+  const text = chip.textContent.trim();
+  if (!existing.includes(text)) { varEl.value = [...existing, text].join(", "); saveState(); }
+  chip.remove();
+  if (!$("suggestions").querySelector(".suggestion-chip")) hideSuggestions();
+});
 
 const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>';
 const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4 6.3 6.3 0 0 0 20 14.5z"/></svg>';
