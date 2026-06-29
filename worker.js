@@ -6,13 +6,13 @@ const MARKETPLACE = {
   GB: "EBAY_GB", DE: "EBAY_DE", FR: "EBAY_FR", IT: "EBAY_IT", ES: "EBAY_ES",
   AT: "EBAY_AT", CH: "EBAY_CH", IE: "EBAY_IE", NL: "EBAY_NL", BE: "EBAY_BE",
   PL: "EBAY_PL", US: "EBAY_US", CA: "EBAY_CA", AU: "EBAY_AU", HK: "EBAY_HK",
-  SG: "EBAY_SG", MY: "EBAY_MY", PH: "EBAY_PH",
+  SG: "EBAY_SG",
 };
 
 const CURRENCY = {
   GB: "GBP", DE: "EUR", FR: "EUR", IT: "EUR", ES: "EUR", AT: "EUR", CH: "CHF",
   IE: "EUR", NL: "EUR", BE: "EUR", PL: "PLN", US: "USD", CA: "CAD", AU: "AUD",
-  HK: "HKD", SG: "SGD", MY: "MYR", PH: "PHP",
+  HK: "HKD", SG: "SGD",
 };
 
 // Frontend sort value -> Browse API sort parameter
