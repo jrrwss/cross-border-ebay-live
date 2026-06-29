@@ -89,6 +89,15 @@
   .price{font-size:16px; font-weight:700;}
   .meta{font-size:12px; color:var(--faint); display:flex; flex-wrap:wrap; gap:4px 10px;}
   .empty{text-align:center; color:var(--muted); padding:40px 16px; font-size:14px;}
+  .saved-section{margin-top:12px; border-top:1px dashed var(--hair-strong); padding-top:11px; display:flex; flex-direction:column; gap:8px;}
+  .saved-label{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0;}
+  .saved-chips{display:flex; flex-wrap:wrap; gap:7px;}
+  .saved-chip{display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:var(--field); border:1px solid var(--hair-strong); border-radius:999px; font-size:13px; color:var(--ink); cursor:pointer; font-family:var(--sans);}
+  .saved-chip:hover{border-color:var(--accent); color:var(--accent);}
+  .saved-del{color:var(--faint); font-size:16px; line-height:1;}
+  .saved-del:hover{color:var(--red);}
+  .save-btn{align-self:flex-start; background:none; border:none; color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.06em; cursor:pointer; padding:0;}
+  .save-btn:hover{color:var(--accent);}
   @media (max-width:520px){.wrap{padding:22px 15px 52px;} h1{font-size:24px;} .searchrow{flex-wrap:wrap;} #go{width:100%; justify-content:center;} .thumb{width:64px; height:64px;}}
 </style>
 </head>
@@ -130,6 +139,12 @@
       <label class="toggle"><input id="fs" type="checkbox" /><span class="dot"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6l3 3 5-6"/></svg></span>Free shipping</label>
     </div>
 
+    <div class="saved-section" id="saved-section">
+      <p class="saved-label" id="saved-label" hidden>Saved searches</p>
+      <div class="saved-chips" id="saved-list"></div>
+      <button class="save-btn" id="save-btn">+ Save this search</button>
+    </div>
+
     <details class="setup" id="setup">
       <summary>Worker endpoint</summary>
       <div class="row">
@@ -154,15 +169,52 @@ const SITES = {
 };
 const ALL = Object.keys(SITES);
 const DEFAULT_WORKER = "https://cross-border-ebay.stoppet.workers.dev";
-const LS = { state:"xbe.state", pins:"xbe.pins", theme:"xbe.theme", worker:"xbe.worker" };
+const LS = { state:"xbe.state", pins:"xbe.pins", theme:"xbe.theme", worker:"xbe.worker", saved:"xbe.saved" };
 const $ = (id) => document.getElementById(id);
 const q=$("q"), go=$("go"), scope=$("scope"), sort=$("sort"), cond=$("cond"), min=$("min"), max=$("max"),
       loc=$("loc"), bin=$("bin"), fs=$("fs"), worker=$("worker"), statusEl=$("status"), resultsEl=$("results");
 let pins = load(LS.pins, []);
+let savedSearches = load(LS.saved, []);
 
 function load(k,f){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):f; }catch(e){ return f; } }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 function workerBase(){ return (worker.value || DEFAULT_WORKER).trim().replace(/\/+$/,""); }
+
+function currentSearchEntry(name){
+  return { name, q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked };
+}
+function saveCurrentSearch(){
+  const name = prompt("Name this search:");
+  if (!name || !name.trim()) return;
+  savedSearches = [...savedSearches, currentSearchEntry(name.trim())];
+  save(LS.saved, savedSearches);
+  renderSaved();
+}
+function loadSavedSearch(entry){
+  q.value = entry.q || ""; scope.value = entry.scope || "all"; sort.value = entry.sort || "12";
+  cond.value = entry.cond || ""; min.value = entry.min || ""; max.value = entry.max || "";
+  loc.checked = entry.loc !== false; bin.checked = !!entry.bin; fs.checked = !!entry.fs;
+  search();
+}
+function deleteSavedSearch(i){
+  savedSearches = savedSearches.filter((_,j) => j !== i);
+  save(LS.saved, savedSearches);
+  renderSaved();
+}
+function renderSaved(){
+  const listEl = $("saved-list"), labelEl = $("saved-label");
+  labelEl.hidden = !savedSearches.length;
+  listEl.innerHTML = savedSearches.map((s,i) =>
+    `<button class="saved-chip" data-idx="${i}">${esc(s.name)}<span class="saved-del" data-del="${i}" aria-label="Delete">&times;</span></button>`
+  ).join("");
+}
+$("saved-list").addEventListener("click", (e) => {
+  const del = e.target.closest("[data-del]");
+  if (del){ deleteSavedSearch(+del.dataset.del); return; }
+  const chip = e.target.closest("[data-idx]");
+  if (chip) loadSavedSearch(savedSearches[+chip.dataset.idx]);
+});
+$("save-btn").addEventListener("click", saveCurrentSearch);
 
 function saveState(){
   save(LS.state, {q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked});
@@ -263,6 +315,7 @@ tb.addEventListener("click", ()=>{ const n=isDark()?"light":"dark"; document.doc
     loc.checked=s.loc!==false; bin.checked=!!s.bin; fs.checked=!!s.fs; }
   worker.value = load(LS.worker, "") || "";
   if(!worker.value) $("setup").open = true;
+  renderSaved();
   q.focus();
 })();
 </script>
