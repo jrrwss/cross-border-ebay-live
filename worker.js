@@ -95,10 +95,11 @@ export default {
         });
         if (!aiRes.ok) return withCORS(Response.json({ suggestions: [] }), responseOrigin);
         const aiData = await aiRes.json();
-        const text = aiData.content?.[0]?.text || "[]";
-        let suggestions;
-        try { suggestions = JSON.parse(text); } catch { suggestions = []; }
-        return withCORS(Response.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 5) : [] }), responseOrigin);
+        const text = aiData.content?.[0]?.text || "";
+        let suggestions = [];
+        const match = text.match(/\[[\s\S]*?\]/);
+        if (match) { try { suggestions = JSON.parse(match[0]); } catch { suggestions = []; } }
+        return withCORS(Response.json({ suggestions: Array.isArray(suggestions) ? suggestions.filter(s => typeof s === "string" && s.trim()).slice(0, 5) : [] }), responseOrigin);
       } catch {
         return withCORS(Response.json({ suggestions: [] }), responseOrigin);
       }

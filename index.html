@@ -237,6 +237,7 @@ function chosenCountries(){
 }
 
 async function search(){
+  hideSuggestions();
   saveState();
   const term = q.value.trim();
   if (!term){ q.focus(); return; }
@@ -331,7 +332,7 @@ q.addEventListener("keydown", (e)=>{ if (e.key === "Enter") search(); });
 [scope,sort,cond,min,max,worker,$("variants"),$("exclude")].forEach((el)=>el.addEventListener("change", saveState));
 [loc,bin,fs].forEach((el)=>el.addEventListener("change", saveState));
 
-let _sugTimer = null;
+let _sugTimer = null, _sugSeq = 0;
 q.addEventListener("input", () => {
   clearTimeout(_sugTimer);
   const val = q.value.trim();
@@ -341,16 +342,19 @@ q.addEventListener("input", () => {
 function hideSuggestions(){ const el=$("suggestions"); el.hidden=true; el.innerHTML=""; }
 async function fetchSuggestions(term){
   const base = workerBase(); if (!base) return;
+  const seq = ++_sugSeq;
   try {
     const res = await fetch(base + "/suggest?q=" + encodeURIComponent(term));
+    if (seq !== _sugSeq) return; // stale response — a newer request is in flight
     if (!res.ok) return;
     const data = await res.json();
-    showSuggestions(data.suggestions || []);
-  } catch { /* ignore network errors silently */ }
+    if (seq !== _sugSeq) return;
+    const list = data.suggestions || [];
+    if (list.length) showSuggestions(list); // only update if we got real results
+  } catch { /* ignore */ }
 }
 function showSuggestions(list){
   const el = $("suggestions");
-  if (!list.length){ el.hidden=true; el.innerHTML=""; return; }
   el.hidden = false;
   el.innerHTML = '<span class="sug-label">Suggestions:</span>' +
     list.map(s => `<button class="suggestion-chip" type="button">${esc(s)}</button>`).join("");
