@@ -131,6 +131,8 @@
         <select id="cond"><option value="">Any</option><option value="1000">New</option><option value="1500">New other</option><option value="2000">Manufacturer refurbished</option><option value="2500">Seller refurbished</option><option value="3000">Used</option></select></div>
       <div class="field"><label for="min">Min price</label><input id="min" type="number" min="0" inputmode="numeric" placeholder="0" /></div>
       <div class="field"><label for="max">Max price</label><input id="max" type="number" min="0" inputmode="numeric" placeholder="—" /></div>
+      <div class="field"><label for="variants">Also search</label><input id="variants" type="text" placeholder="leika, leicaflex" /></div>
+      <div class="field"><label for="exclude">Exclude</label><input id="exclude" type="text" placeholder="strap, case, manual" /></div>
     </div>
 
     <div class="toggles">
@@ -181,7 +183,7 @@ function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){}
 function workerBase(){ return (worker.value || DEFAULT_WORKER).trim().replace(/\/+$/,""); }
 
 function currentSearchEntry(name){
-  return { name, q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked };
+  return { name, q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked, variants:$("variants").value, exclude:$("exclude").value };
 }
 function saveCurrentSearch(){
   const name = prompt("Name this search:");
@@ -194,6 +196,7 @@ function loadSavedSearch(entry){
   q.value = entry.q || ""; scope.value = entry.scope || "all"; sort.value = entry.sort || "12";
   cond.value = entry.cond || ""; min.value = entry.min || ""; max.value = entry.max || "";
   loc.checked = entry.loc !== false; bin.checked = !!entry.bin; fs.checked = !!entry.fs;
+  $("variants").value = entry.variants || ""; $("exclude").value = entry.exclude || "";
   search();
 }
 function deleteSavedSearch(i){
@@ -217,7 +220,7 @@ $("saved-list").addEventListener("click", (e) => {
 $("save-btn").addEventListener("click", saveCurrentSearch);
 
 function saveState(){
-  save(LS.state, {q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked});
+  save(LS.state, {q:q.value, scope:scope.value, sort:sort.value, cond:cond.value, min:min.value, max:max.value, loc:loc.checked, bin:bin.checked, fs:fs.checked, variants:$("variants").value, exclude:$("exclude").value});
   save(LS.worker, worker.value.trim());
 }
 
@@ -233,23 +236,43 @@ async function search(){
   const base = workerBase();
   if (!base){ $("setup").open = true; setStatus("Add your Worker URL below to search.", true); return; }
 
+  // Build exclusion suffix: "strap, case" → " -strap -case"
+  const excludeSuffix = $("exclude").value.split(",").map(w=>w.trim()).filter(Boolean)
+    .map(w => w.startsWith("-") ? w : "-"+w).join(" ");
+  const suffix = excludeSuffix ? " " + excludeSuffix : "";
+
+  // Build query list: main term + any variants, each with the exclusion suffix
+  const variantTerms = $("variants").value.split(",").map(v=>v.trim()).filter(Boolean);
+  const queries = [term + suffix, ...variantTerms.map(v => v + suffix)];
+
   const countries = chosenCountries();
-  const params = new URLSearchParams({
-    q: term, countries: countries.join(","), sort: sort.value,
+  const baseParams = new URLSearchParams({
+    countries: countries.join(","), sort: sort.value,
     loc: loc.checked?"1":"0", bin: bin.checked?"1":"0", fs: fs.checked?"1":"0",
   });
-  if (cond.value) params.set("cond", cond.value);
-  if (min.value) params.set("min", min.value);
-  if (max.value) params.set("max", max.value);
+  if (cond.value) baseParams.set("cond", cond.value);
+  if (min.value) baseParams.set("min", min.value);
+  if (max.value) baseParams.set("max", max.value);
 
   go.disabled = true;
-  setStatus("Searching " + countries.length + " " + (countries.length===1?"site":"sites") + "…");
+  const siteWord = countries.length===1?"site":"sites";
+  const queryNote = queries.length > 1 ? " × "+queries.length+" queries" : "";
+  setStatus("Searching " + countries.length + " " + siteWord + queryNote + "…");
   resultsEl.innerHTML = "";
   try {
-    const res = await fetch(base + "/search?" + params.toString());
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    render(data.items || [], data.errors || []);
+    const responses = await Promise.all(queries.map(qStr => {
+      const p = new URLSearchParams(baseParams);
+      p.set("q", qStr);
+      return fetch(base + "/search?" + p.toString()).then(r => { if (!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+    }));
+    // Merge results, deduplicate by URL
+    const seen = new Set();
+    const items = [], errors = [];
+    for (const data of responses) {
+      for (const it of (data.items || [])) { if (!seen.has(it.url)){ seen.add(it.url); items.push(it); } }
+      errors.push(...(data.errors || []));
+    }
+    render(items, errors);
   } catch (e) {
     setStatus("Couldn't reach the Worker (" + e.message + "). Check the URL and that it's deployed.", true);
   } finally {
@@ -298,7 +321,7 @@ function setStatus(t, isErr){ statusEl.textContent = t; statusEl.classList.toggl
 
 go.addEventListener("click", search);
 q.addEventListener("keydown", (e)=>{ if (e.key === "Enter") search(); });
-[scope,sort,cond,min,max,worker].forEach((el)=>el.addEventListener("change", saveState));
+[scope,sort,cond,min,max,worker,$("variants"),$("exclude")].forEach((el)=>el.addEventListener("change", saveState));
 [loc,bin,fs].forEach((el)=>el.addEventListener("change", saveState));
 
 const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>';
@@ -312,7 +335,8 @@ tb.addEventListener("click", ()=>{ const n=isDark()?"light":"dark"; document.doc
   const t=load(LS.theme,null); if(t) document.documentElement.setAttribute("data-theme",t); paint();
   const s=load(LS.state,null);
   if(s){ q.value=s.q||""; scope.value=s.scope||"all"; sort.value=s.sort||"12"; cond.value=s.cond||""; min.value=s.min||""; max.value=s.max||"";
-    loc.checked=s.loc!==false; bin.checked=!!s.bin; fs.checked=!!s.fs; }
+    loc.checked=s.loc!==false; bin.checked=!!s.bin; fs.checked=!!s.fs;
+    $("variants").value=s.variants||""; $("exclude").value=s.exclude||""; }
   worker.value = load(LS.worker, "") || "";
   if(!worker.value) $("setup").open = true;
   renderSaved();
